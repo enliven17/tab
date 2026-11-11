@@ -1,0 +1,28 @@
+{
+  "name": "tab-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "deploy": "node scripts/deploy.ts",
+    "e2e": "node scripts/e2e.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "viem": "^2.57.18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "^5.9.3",
+    "vite": "8.3.5"
+  }
+}

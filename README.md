@@ -44,8 +44,9 @@ In Solidity the same guarantee is a convention checked by reviewers. Here a writ
   - `authorization_hash`: the EIP-712 struct hash, built with `keccak_words`.
   - `TabMsg`: the ABI of the contract, with Solidity-compatible selectors.
   - `Tab`: the escrow contract. Terms are written once per tab; `held`, `charged` and `refunded` are separate maps.
+- `src/demo_token.fe`: a mintable test token for the demo deployment.
 - `src/tests.fe`
-  - `Token`, `Wallet` (ERC-1271 payer) and `Stranger` helper contracts.
+  - `Wallet` (ERC-1271 payer) and `Stranger` helper contracts.
   - Flow tests for open, charge, close, reclaim and refund, and revert tests for the error paths.
   - A vector test that checks the struct hash, digest and signer against values produced by Foundry's `cast` from the same typed data.
 
@@ -59,11 +60,26 @@ fe test
 fe build
 ```
 
-No other tools are needed. The test vectors were generated with Foundry (`cast`), which is not required to run the tests.
+The contracts need no other tools; the web demo needs Node 24, pnpm and Foundry's `anvil`. The test vectors were generated with Foundry (`cast`), which is not required to run the tests.
 
 ## Demo
 
 `fe test` runs the flows end to end against deployed contracts: a wallet signs an authorization, the merchant opens the tab, charges it in parts, closes it, and refunds part of a charge.
+
+### Web demo
+
+`web/` is a small React app for the full flow with a real wallet: the payer mints test tokens and signs, the merchant opens, charges, closes and refunds.
+
+```sh
+anvil                      # local chain, in another terminal
+fe build
+cd web && pnpm install
+pnpm run deploy            # deploys Tab and DemoToken, writes src/deployment.json
+pnpm run e2e               # scripted flow with Anvil accounts 0 and 1
+pnpm dev
+```
+
+`pnpm run deploy` reads `RPC_URL` and `PRIVATE_KEY` to deploy to another network.
 
 ## Limitations
 
