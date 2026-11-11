@@ -15,7 +15,7 @@ export function Mark({ ink = "#1c1a16", paper = "#ece5d6" }: { ink?: string; pap
 const LINKS = [
   { href: "/#how", label: "How it works" },
   { href: "/#fe", label: "Built in Fe" },
-  { href: "/#contract", label: "Contract" },
+  { href: "/docs/", label: "Docs" },
   { href: "/brand/", label: "Brand" },
   { href: REPO, label: "GitHub" },
 ];
@@ -41,6 +41,7 @@ export function Nav({ current, children }: { current?: string; children?: ReactN
         </nav>
         {children}
       </div>
+      <i className="progress" aria-hidden="true" />
     </header>
   );
 }
@@ -52,6 +53,7 @@ export function Footer() {
         <span>Tab. Auth-capture payments in Fe. Not audited; demo uses a valueless test token.</span>
         <nav aria-label="Footer">
           <a href="/app/">Demo</a>
+          <a href="/docs/">Docs</a>
           <a href="/brand/">Brand</a>
           <a href={REPO}>Source</a>
         </nav>

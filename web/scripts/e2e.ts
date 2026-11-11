@@ -129,4 +129,4 @@ await assert.rejects(
   }),
   /AlreadyOpen/,
 );
-console.log("ok: opened, charged 42.5, closed, refunded 2.5");
+console.log(`ok: opened, charged 42.5, closed, refunded 2.5 (tab 0x${id.toString(16)})`);

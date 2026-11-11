@@ -1,4 +1,6 @@
+import { useReveal } from "../ui/motion.ts";
 import { Footer, Nav, REPO } from "../ui/Shell.tsx";
+import { Story } from "./Story.tsx";
 
 const CHARGES = [
   { label: "espresso ×2", value: "7.00" },
@@ -49,25 +51,6 @@ function PrintedBill() {
   );
 }
 
-const STEPS = [
-  {
-    title: "Sign",
-    text: "The payer signs one EIP-712 authorization: who may charge, which token, the limit and two deadlines. No transaction, no gas.",
-  },
-  {
-    title: "Open",
-    text: "Anyone submits the signature. The contract checks it and moves the limit into escrow. The digest becomes the tab id, so it can never open twice.",
-  },
-  {
-    title: "Charge",
-    text: "The merchant charges the real cost, in as many parts as needed, until the capture deadline. Never more than what is held.",
-  },
-  {
-    title: "Settle",
-    text: "The merchant closes the tab and the rest returns to the payer. If the merchant disappears, anyone can return it after the deadline.",
-  },
-];
-
 const CALLS = [
   ["open", "anyone, before openBy", "Verify the signature, move the limit into escrow."],
   ["charge", "merchant, until captureBy", "Send part of the held amount to the merchant."],
@@ -86,6 +69,7 @@ const WINDOWS = [
 ];
 
 export function Landing() {
+  useReveal();
   return (
     <>
       <Nav>
@@ -96,7 +80,6 @@ export function Landing() {
 
       <section className="hero wrap">
         <div>
-          <p className="eyebrow">Auth-capture payments · written in Fe</p>
           <h1>
             Open a tab. Charge what was used. <em>Return the rest.</em>
           </h1>
@@ -133,14 +116,13 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="wrap block">
-        <p className="eyebrow">The problem</p>
+      <section className="wrap block" data-reveal="">
         <h2>On-chain payments move everything at once.</h2>
         <p className="lede">
           A hotel, a ride or a metered API knows the limit first and the real cost later. Cards
           solve this with authorization and capture. On chain the payer overpays and waits.
         </p>
-        <div className="versus">
+        <div className="versus" data-reveal="">
           <div className="slip">
             <div className="paper">
               <h3>
@@ -189,19 +171,10 @@ export function Landing() {
       </section>
 
       <section className="wrap block" id="how">
-        <p className="eyebrow">How it works</p>
         <h2>Four steps, one signature.</h2>
-        <ol className="steps">
-          {STEPS.map((step, index) => (
-            <li key={step.title}>
-              <span className="num">0{index + 1}</span>
-              <h3>{step.title}</h3>
-              <p>{step.text}</p>
-            </li>
-          ))}
-        </ol>
+        <Story />
 
-        <div className="slip timeline-slip">
+        <div className="slip timeline-slip" data-reveal="">
           <div className="paper">
             <h3>
               <span>When</span> each call is allowed
@@ -235,7 +208,6 @@ export function Landing() {
       <section className="dark" id="fe">
         <div className="wrap block fe">
           <div>
-            <p className="eyebrow">Built in Fe</p>
             <h2>The compiler knows what each call may touch.</h2>
             <p className="lede">
               Every handler lists the state and capabilities it uses. <code>refund</code> never
@@ -246,7 +218,7 @@ export function Landing() {
               error: contract field `held` is not in this handler's `uses`
             </p>
           </div>
-          <pre className="code">
+          <pre className="code" data-reveal="">
             <code>
               <span className="k">Refund</span> {"{ id, amount }"}
               {"\n    "}
@@ -269,7 +241,6 @@ export function Landing() {
       </section>
 
       <section className="wrap block" id="contract">
-        <p className="eyebrow">The contract</p>
         <h2>Five calls. No owner, no fees, no upgrades.</h2>
         <div className="slip">
           <div className="paper ledger">
@@ -293,7 +264,7 @@ export function Landing() {
         </p>
       </section>
 
-      <section className="wrap final">
+      <section className="wrap final" data-reveal="">
         <h2>
           Put it on <em>the tab.</em>
         </h2>
@@ -301,8 +272,8 @@ export function Landing() {
           <a className="button" href="/app/">
             Open the demo
           </a>
-          <a className="button ghost" href={REPO}>
-            Source on GitHub
+          <a className="button ghost" href="/docs/">
+            Read the docs
           </a>
         </div>
       </section>

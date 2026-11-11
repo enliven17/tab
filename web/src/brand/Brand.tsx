@@ -26,7 +26,6 @@ export function Brand() {
       </Nav>
 
       <main className="wrap kit">
-        <p className="eyebrow">Brand kit</p>
         <h1>A bill, not a bank.</h1>
         <p className="lede">
           Tab looks like the slip of paper a waiter leaves on the table: cream paper, printed ink,

@@ -72,13 +72,10 @@ export function App() {
 
       <div className="wrap">
         <section className="intro">
-          <p className="eyebrow">
-            Demo · {chain.name} · contract {short(tab)}
-          </p>
           <h1>Run a tab, start to finish.</h1>
           <p>
             Use two accounts: one signs as the payer, the other opens and charges as the merchant.
-            The token is a test token anyone can mint.
+            The token is a test token anyone can mint. Network: {chain.name}.
           </p>
           <ol className="rail">
             {["Sign", "Open", "Charge and settle"].map((label, index) => (

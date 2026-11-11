@@ -322,3 +322,91 @@ textarea {
   gap: 18px;
   margin-left: auto;
 }
+
+/* Reading progress along the bottom of the bar, driven by scroll position. */
+.progress {
+  display: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  .progress {
+    display: block;
+    position: absolute;
+    inset: auto 0 -1px 0;
+    height: 2px;
+    background: var(--stamp);
+    transform: scaleX(0);
+    transform-origin: left;
+    animation: grow linear both;
+    animation-timeline: scroll(root);
+  }
+}
+
+@keyframes grow {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Reveal on scroll. Only hidden once the script has marked the page. */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.js [data-reveal].in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Page changes: the old page lifts away and the new one feeds in like paper.
+   The bar keeps its place. */
+@view-transition {
+  navigation: auto;
+}
+
+.bar {
+  view-transition-name: bar;
+}
+
+::view-transition-old(root) {
+  animation: leave 0.22s ease-in both;
+}
+
+::view-transition-new(root) {
+  animation: feed 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes leave {
+  to {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes feed {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}

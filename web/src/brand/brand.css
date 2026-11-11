@@ -2,15 +2,6 @@
   padding-top: 64px;
 }
 
-.kit .eyebrow {
-  margin: 0 0 14px;
-  color: var(--stamp);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .kit h1 {
   margin: 0;
   font-family: var(--serif);
