@@ -40,6 +40,26 @@ h1 em,
 }
 
 /* Hero */
+.hero-band {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-band .ascii {
+  opacity: 0.55;
+  mask-image: linear-gradient(to right, transparent 30%, #000 75%);
+}
+
+.hero {
+  position: relative;
+}
+
+@media (max-width: 860px) {
+  .hero-band .ascii {
+    mask-image: linear-gradient(to bottom, transparent 40%, #000 90%);
+  }
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);

@@ -1,3 +1,4 @@
+import { AsciiField } from "../ui/Ascii.tsx";
 import { useReveal } from "../ui/motion.ts";
 import { Footer, Nav, REPO } from "../ui/Shell.tsx";
 import { Story } from "./Story.tsx";
@@ -78,6 +79,8 @@ export function Landing() {
         </a>
       </Nav>
 
+      <div className="hero-band">
+        <AsciiField />
       <section className="hero wrap">
         <div>
           <h1>
@@ -98,6 +101,7 @@ export function Landing() {
         </div>
         <PrintedBill />
       </section>
+      </div>
 
       <section className="strip" aria-label="Facts">
         <div className="wrap">

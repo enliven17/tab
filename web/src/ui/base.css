@@ -301,26 +301,164 @@ textarea {
   align-items: end;
 }
 
+/* A canvas of drifting printer characters; fills its positioned parent. */
+.ascii {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Footer: ink, with the character field behind it. */
 .foot {
-  margin-top: 72px;
-  border-top: 1px dashed var(--rule);
-  color: var(--faint);
-  font-size: 12px;
+  position: relative;
+  margin-top: 96px;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+}
+
+/* Strongest in the top right corner, away from the text. */
+.foot .ascii {
+  opacity: 0.42;
+  mask-image: radial-gradient(110% 95% at 100% 0, #000 28%, transparent 72%);
 }
 
 .foot .wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  align-items: center;
-  padding-top: 20px;
-  padding-bottom: 32px;
+  position: relative;
+  padding-top: 72px;
+  padding-bottom: 28px;
 }
 
-.foot nav {
-  display: flex;
+.foot a {
+  text-decoration: none;
+}
+
+.foot-top {
+  display: grid;
   gap: 18px;
-  margin-left: auto;
+  justify-items: start;
+  padding-bottom: 56px;
+}
+
+.wordmark {
+  margin: 0;
+  color: var(--paper);
+  font: 700 clamp(9px, 1.9vw, 18px) / 1.14 var(--mono);
+  letter-spacing: 0;
+  white-space: pre;
+}
+
+.foot-top p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(26px, 3.4vw, 40px);
+  line-height: 1.1;
+}
+
+.foot-top em {
+  color: var(--stamp);
+}
+
+.foot-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.foot .button {
+  border-color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.foot .button.ghost {
+  background: transparent;
+  color: var(--paper);
+}
+
+.foot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(240px, 1.3fr);
+  gap: 32px;
+  padding: 32px 0;
+  border-top: 1px dashed #4a463c;
+}
+
+.foot-grid nav {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.foot-grid h4 {
+  margin: 0 0 6px;
+  color: #8f8876;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.foot-grid nav a {
+  color: #d8d1c0;
+  transition: color 0.15s ease;
+}
+
+.foot-grid nav a:hover {
+  color: var(--stamp);
+}
+
+/* The deployment, set like the last lines of a bill. */
+.foot-slip {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed #4a463c;
+  background: rgb(251 248 241 / 0.04);
+}
+
+.foot-slip div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.foot-slip dt {
+  color: #8f8876;
+}
+
+.foot-slip dd {
+  margin: 0;
+}
+
+.foot-slip a {
+  border-bottom: 1px dotted currentColor;
+}
+
+.foot-end {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding-top: 20px;
+  border-top: 1px dashed #4a463c;
+  color: #8f8876;
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .foot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .foot-slip {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Reading progress along the bottom of the bar, driven by scroll position. */
