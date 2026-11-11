@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "deploy": "node scripts/deploy.ts",
+    "deploy": "node --env-file-if-exists=.env scripts/deploy.ts",
     "e2e": "node scripts/e2e.ts"
   },
   "engines": {
