@@ -223,7 +223,9 @@ export function Landing() {
               <span className="k">Refund</span> {"{ id, amount }"}
               {"\n    "}
               <span className="k">uses</span> (ctx, <span className="k">mut</span> call, terms,
-              charged, <mark>mut refunded</mark>, <span className="k">mut</span> log)
+              charged,
+              {"\n          "}
+              <mark>mut refunded</mark>, <span className="k">mut</span> log)
               {"\n{\n    "}
               <span className="k">let</span> tab = terms.get(key: id)
               {"\n    "}

@@ -45,7 +45,11 @@ export async function send(account: Address, request: object) {
   const wallet = createWalletClient({ chain, transport: custom(window.ethereum!) });
   const { request: checked } = await reader.simulateContract({ ...request, account } as never);
   const hash = await wallet.writeContract(checked as never);
-  const receipt = await reader.waitForTransactionReceipt({ hash });
+  // Public RPCs can lag a block behind; wait so the next read sees this write.
+  const receipt = await reader.waitForTransactionReceipt({
+    hash,
+    confirmations: chain.id === anvil.id ? 1 : 2,
+  });
   if (receipt.status !== "success") throw new Error("Transaction reverted");
 }
 

@@ -422,9 +422,12 @@ code {
 }
 
 .code {
+  min-width: 0;
   margin: 0;
   padding: 22px;
-  overflow-x: auto;
+  /* Wrap long lines instead of scrolling sideways. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   border: 1px solid #3a372f;
   border-radius: 4px;
   background: #24211c;
