@@ -3,8 +3,12 @@
 // The test account acts as the merchant. The payer is a contract wallet that
 // approves digests on chain (ERC-1271), so no private key is needed.
 
-use ingot::{Tab, TabMsg}
+use core::abi::store_word
+use core::option::Option
+use core::ptr::{self, MemBuffer}
+use ingot::{NAME_HASH, Tab, TabMsg, VERSION_HASH, authorization_hash}
 use std::abi::Bytes32
+use std::evm::{eip712, signature}
 
 const GAS: u256 = 1_000_000
 const LIMIT: u256 = 100
@@ -370,4 +374,53 @@ fn refund_above_the_charged_amount_reverts() uses (evm: mut Evm) {
         value: Wei::zero(),
         message: TabMsg::Refund { id, amount: 11 },
     )
+}
+
+// Anvil account 0 signs the typed data below with
+// `cast wallet sign --data`; the hashes come from `cast keccak` over
+// `cast abi-encode`, independent of this implementation.
+//
+//   domain:  Tab, version 1, chain 31337, verifying contract 0xdddd...dddd
+//   message: payer anvil 0, merchant anvil 1, token 0xcccc...cccc,
+//            limit 100, openBy 2000000000, captureBy 2000003600, nonce 1
+const PAYER: u256 = 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
+const STRUCT_HASH: u256 = 0xa95e22e4e94ede262846c68139cbfc0b92146ccc51635cadd9d816223f0b0047
+const DIGEST: u256 = 0x6a28aa36cd2f9d081439beb4bfc588be774d515b530349f9d28bb928a2219d38
+const SIG_R: u256 = 0x53941482bff2d9088cc19021b6be44787bd817ee856422b470fb5c44f9e4a192
+const SIG_S: u256 = 0x46aea031820deb48dde96a5b98a63482c5139a54d019e2e1d9105aef7d679f54
+
+#[test]
+fn authorization_matches_wallet_typed_data() {
+    let struct_hash = authorization_hash(
+        payer: Address::new(PAYER),
+        merchant: Address::new(0x70997970c51812dc3a010c7d01b50e0d17dc79c8),
+        token: Address::new(0xcccccccccccccccccccccccccccccccccccccccc),
+        limit: 100,
+        open_by: Timestamp::from_seconds(2000000000),
+        capture_by: Timestamp::from_seconds(2000003600),
+        nonce: 1,
+    )
+    assert!(struct_hash == STRUCT_HASH)
+
+    let digest = eip712::digest(
+        domain_separator: eip712::domain_separator(
+            name_hash: NAME_HASH,
+            version_hash: VERSION_HASH,
+            chain_id: 31337,
+            verifying_contract: Address::new(0xdddddddddddddddddddddddddddddddddddddddd),
+        ),
+        struct_hash,
+    )
+    assert!(digest == DIGEST)
+
+    let sig = MemBuffer::new(65)
+    unsafe {
+        store_word(ptr: sig.ptr(), value: SIG_R)
+        store_word(ptr: ptr::offset_bytes(sig.ptr(), 32), value: SIG_S)
+        *ptr::offset_bytes(sig.ptr(), 64) = 27
+    }
+    match signature::recover(digest, sig.span()) {
+        Option::Some(signer) => assert!(signer.word() == PAYER),
+        Option::None => assert!(false),
+    }
 }

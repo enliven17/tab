@@ -10,8 +10,8 @@ use std::evm::{StorageMap, erc20, signature}
 use std::evm::crypto::keccak_words
 use std::evm::eip712::Domain
 
-const NAME_HASH: u256 = keccak("Tab")
-const VERSION_HASH: u256 = keccak("1")
+pub const NAME_HASH: u256 = keccak("Tab")
+pub const VERSION_HASH: u256 = keccak("1")
 
 pub const AUTHORIZATION_TYPEHASH: u256 = keccak(
     "Authorization(address payer,address merchant,address token,uint256 limit,uint256 openBy,uint256 captureBy,uint256 nonce)",
