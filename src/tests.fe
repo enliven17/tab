@@ -181,6 +181,18 @@ fn open_moves_the_limit_into_escrow() uses (evm: mut Evm) {
     assert!(held(w, id) == LIMIT)
     assert!(balance(w, account: w.tab) == LIMIT)
     assert!(balance(w, account: w.wallet) == 0)
+
+    let terms: (Address, Address, Address, Timestamp) = evm
+        .call(
+            addr: w.tab,
+            gas: GAS,
+            value: Wei::zero(),
+            message: TabMsg::TermsOf { id },
+        )
+    assert!(terms.0 == w.wallet)
+    assert!(terms.1 == evm.address())
+    assert!(terms.2 == w.token)
+    assert!(terms.3 == Timestamp::from_seconds(NEVER))
 }
 
 #[test]

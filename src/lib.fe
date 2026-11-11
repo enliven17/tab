@@ -75,6 +75,8 @@ msg TabMsg {
         capture_by: Timestamp,
         nonce: u256,
     } -> u256,
+    #[selector = sol("terms(uint256)")]
+    TermsOf { id: u256 } -> (Address, Address, Address, Timestamp),
     #[selector = sol("held(uint256)")]
     Held { id: u256 } -> u256,
     #[selector = sol("charged(uint256)")]
@@ -91,6 +93,9 @@ pub struct NotExpired {}
 
 #[error]
 pub struct ZeroAmount {}
+
+#[error]
+pub struct NoMerchant {}
 
 #[error]
 pub struct AlreadyOpen {}
@@ -170,6 +175,9 @@ pub contract Tab uses (ctx: Ctx, call: mut Call, log: mut Log) {
             }
             if limit == 0 {
                 revert_error(ZeroAmount {})
+            }
+            if merchant == Address::zero() {
+                revert_error(NoMerchant {})
             }
             let id = domain
                 .digest(
@@ -297,6 +305,15 @@ pub contract Tab uses (ctx: Ctx, call: mut Call, log: mut Log) {
                         nonce,
                     ),
                 )
+        }
+
+        // Payer, merchant, token and capture deadline. The payer is the zero
+        // address for an id that was never opened.
+        TermsOf { id } -> (Address, Address, Address, Timestamp)
+        uses (terms)
+        {
+            let tab = terms.get(key: id)
+            (tab.payer, tab.merchant, tab.token, tab.capture_by)
         }
 
         Held { id } -> u256 uses (held) {

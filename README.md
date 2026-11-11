@@ -72,6 +72,9 @@ No other tools are needed. The test vectors were generated with Foundry (`cast`)
 - The payer must approve the contract for `limit` before the tab is opened. ERC-3009 and Permit2 funding are not implemented.
 - There is no operator or fee role; only the merchant can charge, close and refund.
 - Refunds have no deadline.
+- A signed authorization cannot be cancelled; it stays usable until `openBy`. Keep `openBy` short.
+- `close` and `reclaim` push the remainder to the payer. If the token blocks transfers to the payer (a blacklist, a pause), the remainder is stuck.
+- `open` is permissionless, so the merchant's own `open` can revert with `AlreadyOpen` if someone submitted the authorization first. The tab has the signed terms either way; read them with `terms(id)`.
 - The tests cannot move block time, so expiry is tested with deadlines in the past.
 
 ## Declaration
