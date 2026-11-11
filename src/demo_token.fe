@@ -1,0 +1,93 @@
+// A test token for the demo deployment. Anyone can mint; it has no value.
+
+use std::evm::StorageMap
+
+pub msg TokenMsg {
+    #[selector = sol("decimals()")]
+    Decimals -> u8,
+    #[selector = sol("balanceOf(address)")]
+    BalanceOf { account: Address } -> u256,
+    #[selector = sol("allowance(address,address)")]
+    Allowance { owner: Address, spender: Address } -> u256,
+    #[selector = sol("transfer(address,uint256)")]
+    Transfer { to: Address, amount: u256 } -> bool,
+    #[selector = sol("approve(address,uint256)")]
+    Approve { spender: Address, amount: u256 } -> bool,
+    #[selector = sol("transferFrom(address,address,uint256)")]
+    TransferFrom { from: Address, to: Address, amount: u256 } -> bool,
+    #[selector = sol("mint(address,uint256)")]
+    Mint { to: Address, amount: u256 },
+}
+
+#[event]
+struct Transfer {
+    #[indexed]
+    from: Address,
+    #[indexed]
+    to: Address,
+    value: u256,
+}
+
+#[event]
+struct Approval {
+    #[indexed]
+    owner: Address,
+    #[indexed]
+    spender: Address,
+    value: u256,
+}
+
+pub contract DemoToken uses (ctx: Ctx, log: mut Log) {
+    mut balances: StorageMap<Address, u256>,
+    mut allowances: StorageMap<(Address, Address), u256>,
+
+    recv TokenMsg {
+        Decimals -> u8 {
+            6
+        }
+
+        BalanceOf { account } -> u256 uses (balances) {
+            balances.get(key: account)
+        }
+
+        Allowance { owner, spender } -> u256 uses (allowances) {
+            allowances.get(key: (owner, spender))
+        }
+
+        // Checked arithmetic reverts when the balance is too low.
+        Transfer { to, amount } -> bool uses (ctx, mut balances, mut log) {
+            let from = ctx.caller()
+            balances.set(key: from, value: balances.get(key: from) - amount)
+            balances.set(key: to, value: balances.get(key: to) + amount)
+            log.emit(Transfer { from, to, value: amount })
+            true
+        }
+
+        Approve { spender, amount } -> bool uses (ctx, mut allowances, mut log) {
+            let owner = ctx.caller()
+            allowances.set(key: (owner, spender), value: amount)
+            log.emit(Approval { owner, spender, value: amount })
+            true
+        }
+
+        TransferFrom { from, to, amount } -> bool
+        uses (ctx, mut balances, mut allowances, mut log)
+        {
+            let spender = ctx.caller()
+            allowances
+                .set(
+                    key: (from, spender),
+                    value: allowances.get(key: (from, spender)) - amount,
+                )
+            balances.set(key: from, value: balances.get(key: from) - amount)
+            balances.set(key: to, value: balances.get(key: to) + amount)
+            log.emit(Transfer { from, to, value: amount })
+            true
+        }
+
+        Mint { to, amount } uses (mut balances, mut log) {
+            balances.set(key: to, value: balances.get(key: to) + amount)
+            log.emit(Transfer { from: Address::zero(), to, value: amount })
+        }
+    }
+}

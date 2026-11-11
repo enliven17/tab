@@ -7,6 +7,7 @@ use core::abi::store_word
 use core::option::Option
 use core::ptr::{self, MemBuffer}
 use ingot::{NAME_HASH, Tab, TabMsg, VERSION_HASH, authorization_hash}
+use ingot::demo_token::{DemoToken, TokenMsg}
 use std::abi::Bytes32
 use std::evm::{eip712, signature}
 
@@ -14,60 +15,6 @@ const GAS: u256 = 1_000_000
 const LIMIT: u256 = 100
 const MAGIC_WORD: u256 = 0x1626ba7e << 224
 const NEVER: u256 = 0xffffffffffff
-
-msg TokenMsg {
-    #[selector = sol("balanceOf(address)")]
-    BalanceOf { account: Address } -> u256,
-    #[selector = sol("transfer(address,uint256)")]
-    Transfer { to: Address, amount: u256 } -> bool,
-    #[selector = sol("approve(address,uint256)")]
-    Approve { spender: Address, amount: u256 } -> bool,
-    #[selector = sol("transferFrom(address,address,uint256)")]
-    TransferFrom { from: Address, to: Address, amount: u256 } -> bool,
-    #[selector = sol("mint(address,uint256)")]
-    Mint { to: Address, amount: u256 },
-}
-
-pub contract Token uses (ctx: Ctx) {
-    mut balances: StorageMap<Address, u256>,
-    mut allowances: StorageMap<(Address, Address), u256>,
-
-    recv TokenMsg {
-        BalanceOf { account } -> u256 uses (balances) {
-            balances.get(key: account)
-        }
-
-        Transfer { to, amount } -> bool uses (ctx, mut balances) {
-            let from = ctx.caller()
-            balances.set(key: from, value: balances.get(key: from) - amount)
-            balances.set(key: to, value: balances.get(key: to) + amount)
-            true
-        }
-
-        Approve { spender, amount } -> bool uses (ctx, mut allowances) {
-            allowances.set(key: (ctx.caller(), spender), value: amount)
-            true
-        }
-
-        TransferFrom { from, to, amount } -> bool
-        uses (ctx, mut balances, mut allowances)
-        {
-            let spender = ctx.caller()
-            allowances
-                .set(
-                    key: (from, spender),
-                    value: allowances.get(key: (from, spender)) - amount,
-                )
-            balances.set(key: from, value: balances.get(key: from) - amount)
-            balances.set(key: to, value: balances.get(key: to) + amount)
-            true
-        }
-
-        Mint { to, amount } uses (mut balances) {
-            balances.set(key: to, value: balances.get(key: to) + amount)
-        }
-    }
-}
 
 msg WalletMsg {
     #[selector = sol("isValidSignature(bytes32,bytes)")]
@@ -136,7 +83,7 @@ impl Copy for World {}
 /// Deploys everything and funds the wallet with `LIMIT` tokens, approved for
 /// the tab contract.
 fn world() -> World uses (evm: mut Evm) {
-    let token = evm.create2<Token>(value: Wei::zero(), args: (), salt: 0)
+    let token = evm.create2<DemoToken>(value: Wei::zero(), args: (), salt: 0)
     let tab = evm.create2<Tab>(value: Wei::zero(), args: (), salt: 0)
     let wallet = evm.create2<Wallet>(value: Wei::zero(), args: (), salt: 0)
     evm.call(
