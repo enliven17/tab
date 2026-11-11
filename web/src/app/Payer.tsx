@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { isAddress, type Address } from "viem";
 import type { Session } from "./App.tsx";
-import { encode, tokenAbi, typedData, type Authorization } from "./tab.ts";
-import { amount, chain, money, reader, send, signTypedData, SYMBOL, tab, token } from "./wallet.ts";
+import { encode, tokenAbi, typedData, type Authorization } from "../tab.ts";
+import { amount, chain, money, reader, send, signTypedData, SYMBOL, tab, token } from "../wallet.ts";
 
 const OPEN_WINDOW = 15n * 60n;
 

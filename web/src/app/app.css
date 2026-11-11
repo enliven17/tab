@@ -1,0 +1,81 @@
+.intro {
+  max-width: 720px;
+  padding: 48px 0 28px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--stamp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-size: clamp(36px, 5.6vw, 60px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+}
+
+.intro p {
+  margin: 0;
+  color: var(--faint);
+}
+
+/* Where the visitor is in the flow. */
+.rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rail li {
+  padding: 6px 12px;
+  border: 1px dashed var(--rule);
+  color: var(--faint);
+}
+
+.rail li.on {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.rail span {
+  opacity: 0.6;
+}
+
+.notice {
+  margin: 0 0 20px;
+  padding: 10px 14px;
+  border: 1px dashed var(--ink);
+  background: var(--paper);
+}
+
+.notice.bad {
+  border-color: var(--stamp);
+  color: var(--stamp);
+}
+
+.desk {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.action {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { isAddressEqual, zeroAddress, type Address } from "viem";
 import type { Session } from "./App.tsx";
-import { tabAbi, tokenAbi } from "./tab.ts";
-import { amount, clock, money, reader, send, short, SYMBOL, tab, token } from "./wallet.ts";
+import { tabAbi, tokenAbi } from "../tab.ts";
+import { amount, clock, money, reader, send, short, SYMBOL, tab, token } from "../wallet.ts";
 
 type State = {
   payer: Address;

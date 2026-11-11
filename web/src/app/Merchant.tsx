@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { hashTypedData, hexToBigInt } from "viem";
 import type { Session } from "./App.tsx";
-import { decode, openArgs, tabAbi, typedData, type SignedAuthorization } from "./tab.ts";
-import { chain, clock, money, send, short, SYMBOL, tab } from "./wallet.ts";
+import { decode, openArgs, tabAbi, typedData, type SignedAuthorization } from "../tab.ts";
+import { chain, clock, money, send, short, SYMBOL, tab } from "../wallet.ts";
 
 function parse(code: string): SignedAuthorization | undefined {
   try {

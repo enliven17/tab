@@ -3,7 +3,8 @@ import type { Address } from "viem";
 import { Merchant } from "./Merchant.tsx";
 import { Payer } from "./Payer.tsx";
 import { Receipt } from "./Receipt.tsx";
-import { chain, connect, reason, short, tab } from "./wallet.ts";
+import { Footer, Nav } from "../ui/Shell.tsx";
+import { chain, connect, reason, short, tab } from "../wallet.ts";
 
 /** What every panel needs: the connected account and a way to run a step. */
 export type Session = {
@@ -55,19 +56,11 @@ export function App() {
 
   const session: Session = { account, tick, busy, run };
 
+  const stage = id !== undefined ? 3 : code.trim() ? 2 : 1;
+
   return (
     <>
-      <header className="bar">
-        <a className="mark" href="./" aria-label="Tab">
-          <svg viewBox="0 0 28 32" aria-hidden="true">
-            <path d="M2 1h24v27l-4 3-4-3-4 3-4-3-4 3-4-3z" />
-            <path className="cut" d="M8 9h12M8 15h12M8 21h7" />
-          </svg>
-          TAB
-        </a>
-        <span className="meta">
-          {chain.name} · {short(tab)}
-        </span>
+      <Nav current="/app/">
         <button
           className="ghost"
           disabled={busy}
@@ -75,32 +68,41 @@ export function App() {
         >
           {account ? short(account) : "Connect wallet"}
         </button>
-      </header>
+      </Nav>
 
-      <section className="intro">
-        <h1>Open a tab. Charge what was used. Return the rest.</h1>
-        <p>
-          One signature authorizes a limit. The merchant charges it in parts, and whatever is not
-          charged goes back to the payer. The escrow contract is written in Fe.
-        </p>
-      </section>
+      <div className="wrap">
+        <section className="intro">
+          <p className="eyebrow">
+            Demo · {chain.name} · contract {short(tab)}
+          </p>
+          <h1>Run a tab, start to finish.</h1>
+          <p>
+            Use two accounts: one signs as the payer, the other opens and charges as the merchant.
+            The token is a test token anyone can mint.
+          </p>
+          <ol className="rail">
+            {["Sign", "Open", "Charge and settle"].map((label, index) => (
+              <li key={label} className={index + 1 <= stage ? "on" : undefined}>
+                <span>0{index + 1}</span> {label}
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      {notice && (
-        <p className={notice.bad ? "notice bad" : "notice"} role="status">
-          {notice.text}
-        </p>
-      )}
+        {notice && (
+          <p className={notice.bad ? "notice bad" : "notice"} role="status">
+            {notice.text}
+          </p>
+        )}
 
-      <main className="desk">
-        <Payer session={session} onSigned={setCode} />
-        <Merchant session={session} code={code} onCode={setCode} onOpened={setId} />
-        <Receipt session={session} id={id} onId={setId} />
-      </main>
+        <main className="desk">
+          <Payer session={session} onSigned={setCode} />
+          <Merchant session={session} code={code} onCode={setCode} onOpened={setId} />
+          <Receipt session={session} id={id} onId={setId} />
+        </main>
+      </div>
 
-      <footer className="foot">
-        Demo deployment with a valueless test token. Not audited.{" "}
-        <a href="https://github.com/enliven17/tab">Source</a>
-      </footer>
+      <Footer />
     </>
   );
 }

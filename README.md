@@ -68,7 +68,7 @@ The contracts need no other tools; the web demo needs Node 24, pnpm and Foundry'
 
 ### Web demo
 
-`web/` is a small React app for the full flow with a real wallet: the payer mints test tokens and signs, the merchant opens, charges, closes and refunds.
+`web/` holds three static pages: a landing page (`/`), the demo (`/app/`) and the brand kit (`/brand/`). The demo runs the full flow with a real wallet: the payer mints test tokens and signs, the merchant opens, charges, closes and refunds.
 
 ```sh
 anvil                      # local chain, in another terminal
