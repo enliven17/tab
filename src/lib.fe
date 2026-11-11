@@ -1,82 +1,314 @@
-// A time-locked vault: each account deposits ETH and can withdraw it once its
-// lock period has passed. Replace it with your own project.
+// Tab: auth-capture payments.
+//
+// A payer signs one EIP-712 authorization. Opening the tab moves the
+// authorized limit into escrow. The merchant can then charge the tab in parts
+// until `capture_by`, close it to release the rest, and refund what it has
+// charged. After `capture_by` anyone can return the remainder to the payer.
 
-use std::evm::StorageMap
+use core::keccak
+use std::evm::{StorageMap, erc20, signature}
+use std::evm::crypto::keccak_words
+use std::evm::eip712::Domain
 
-msg VaultMsg {
-    #[selector = sol("deposit()")]
-    Deposit -> Timestamp,
-    #[selector = sol("withdraw(address)")]
-    Withdraw { to: Address } -> Wei,
-    #[selector = sol("balanceOf(address)")]
-    BalanceOf { owner: Address } -> Wei,
-    #[selector = sol("unlockTime(address)")]
-    UnlockTime { owner: Address } -> Timestamp,
+const NAME_HASH: u256 = keccak("Tab")
+const VERSION_HASH: u256 = keccak("1")
+
+pub const AUTHORIZATION_TYPEHASH: u256 = keccak(
+    "Authorization(address payer,address merchant,address token,uint256 limit,uint256 openBy,uint256 captureBy,uint256 nonce)",
+)
+
+/// EIP-712 struct hash of an authorization.
+pub fn authorization_hash(
+    payer: Address,
+    merchant: Address,
+    token: Address,
+    limit: u256,
+    open_by: Timestamp,
+    capture_by: Timestamp,
+    nonce: u256,
+) -> u256 {
+    keccak_words(
+        [
+            AUTHORIZATION_TYPEHASH,
+            payer.word(),
+            merchant.word(),
+            token.word(),
+            limit,
+            open_by.as_seconds(),
+            capture_by.as_seconds(),
+            nonce,
+        ],
+    )
+}
+
+msg TabMsg {
+    #[selector = sol(
+        "open(address,address,address,uint256,uint256,uint256,uint256,bytes)",
+    )]
+    Open {
+        payer: Address,
+        merchant: Address,
+        token: Address,
+        limit: u256,
+        open_by: Timestamp,
+        capture_by: Timestamp,
+        nonce: u256,
+        signature: Bytes,
+    } -> u256,
+    #[selector = sol("charge(uint256,uint256)")]
+    Charge { id: u256, amount: u256 },
+    #[selector = sol("close(uint256)")]
+    Close { id: u256 },
+    #[selector = sol("reclaim(uint256)")]
+    Reclaim { id: u256 },
+    #[selector = sol("refund(uint256,uint256)")]
+    Refund { id: u256, amount: u256 },
+    #[selector = sol(
+        "digest(address,address,address,uint256,uint256,uint256,uint256)",
+    )]
+    Digest {
+        payer: Address,
+        merchant: Address,
+        token: Address,
+        limit: u256,
+        open_by: Timestamp,
+        capture_by: Timestamp,
+        nonce: u256,
+    } -> u256,
+    #[selector = sol("held(uint256)")]
+    Held { id: u256 } -> u256,
+    #[selector = sol("charged(uint256)")]
+    Charged { id: u256 } -> u256,
+    #[selector = sol("refunded(uint256)")]
+    Refunded { id: u256 } -> u256,
+}
+
+#[error]
+pub struct Expired {}
+
+#[error]
+pub struct NotExpired {}
+
+#[error]
+pub struct ZeroAmount {}
+
+#[error]
+pub struct AlreadyOpen {}
+
+#[error]
+pub struct BadSignature {}
+
+#[error]
+pub struct NotMerchant {}
+
+#[error]
+pub struct ExceedsHeld {}
+
+#[error]
+pub struct ExceedsCharged {}
+
+#[event]
+struct Opened {
+    #[indexed]
+    id: u256,
+    #[indexed]
+    payer: Address,
+    #[indexed]
+    merchant: Address,
+    token: Address,
+    limit: u256,
+    capture_by: Timestamp,
 }
 
 #[event]
-struct Deposited {
+struct ChargedTab {
     #[indexed]
-    owner: Address,
-    amount: Wei,
-    unlock_at: Timestamp,
+    id: u256,
+    amount: u256,
 }
 
 #[event]
-struct Withdrawn {
+struct Released {
     #[indexed]
-    owner: Address,
-    to: Address,
-    amount: Wei,
+    id: u256,
+    amount: u256,
 }
 
-pub contract Vault uses (ctx: Ctx, call: mut Call, log: mut Log) {
-    lock: Duration,
-    mut balances: StorageMap<Address, Wei>,
-    mut unlock_at: StorageMap<Address, Timestamp>,
+#[event]
+struct RefundedTab {
+    #[indexed]
+    id: u256,
+    amount: u256,
+}
 
-    init(lock_period: Duration) uses (mut lock) { lock = lock_period }
+/// The terms of a tab, written once when it is opened.
+struct Terms { payer: Address, merchant: Address, token: Address, capture_by: Timestamp }
 
-    recv VaultMsg {
-        // Every deposit restarts the depositor's lock period.
-        #[payable]
-        Deposit -> Timestamp uses (ctx, lock, mut balances, mut unlock_at, mut log) {
-            let owner = ctx.caller()
-            let amount = ctx.value()
-            assert!(amount > Wei::zero(), "Nothing to deposit")
+impl Copy for Terms {}
 
-            let unlock = ctx.timestamp() + lock
-            balances.set(key: owner, value: balances.get(key: owner) + amount)
-            unlock_at.set(key: owner, value: unlock)
-            log.emit(Deposited { owner, amount, unlock_at: unlock })
-            unlock
-        }
+pub contract Tab uses (ctx: Ctx, call: mut Call, log: mut Log) {
+    domain: Domain,
+    mut terms: StorageMap<u256, Terms>,
+    mut held: StorageMap<u256, u256>,
+    mut charged: StorageMap<u256, u256>,
+    mut refunded: StorageMap<u256, u256>,
 
-        Withdraw { to } -> Wei uses (ctx, mut call, mut balances, unlock_at, mut log) {
-            let owner = ctx.caller()
-            let amount = balances.get(key: owner)
-            assert!(amount > Wei::zero(), "Nothing to withdraw")
-            assert!(
-                ctx.timestamp() >= unlock_at.get(key: owner),
-                "Still locked",
+    init()
+    uses (mut domain, ctx)
+    {
+        domain = Domain::new(name_hash: NAME_HASH, version_hash: VERSION_HASH)
+    }
+
+    recv TabMsg {
+        // The tab id is the EIP-712 digest of the authorization, so a signed
+        // authorization opens exactly one tab.
+        Open { payer, merchant, token, limit, open_by, capture_by, nonce, signature } -> u256
+        uses (ctx, mut call, domain, mut terms, mut held, mut log)
+        {
+            if ctx.timestamp() > open_by {
+                revert_error(Expired {})
+            }
+            if limit == 0 {
+                revert_error(ZeroAmount {})
+            }
+            let id = domain
+                .digest(
+                    struct_hash: authorization_hash(
+                        payer,
+                        merchant,
+                        token,
+                        limit,
+                        open_by,
+                        capture_by,
+                        nonce,
+                    ),
+                )
+            if terms.get(key: id).payer != Address::zero() {
+                revert_error(AlreadyOpen {})
+            }
+            if !signature::is_valid_signature_now(payer, digest: id, signature: signature.span()) {
+                revert_error(BadSignature {})
+            }
+
+            terms.set(
+                    key: id,
+                    value: Terms { payer, merchant, token, capture_by },
+                )
+            held.set(key: id, value: limit)
+            erc20::safe_transfer_from(
+                token,
+                owner: payer,
+                receiver: ctx.address(),
+                amount: limit,
             )
+            log.emit(Opened { id, payer, merchant, token, limit, capture_by })
+            id
+        }
 
-            // Update the balance before sending, so a reentrant call finds nothing.
-            balances.set(key: owner, value: Wei::zero())
-            assert!(
-                call.send_value(addr: to, gas: 0, value: amount).success(),
-                "Transfer failed",
+        Charge { id, amount } uses (ctx, mut call, terms, mut held, mut charged, mut log) {
+            let tab = terms.get(key: id)
+            if ctx.caller() != tab.merchant {
+                revert_error(NotMerchant {})
+            }
+            if ctx.timestamp() > tab.capture_by {
+                revert_error(Expired {})
+            }
+            if amount == 0 {
+                revert_error(ZeroAmount {})
+            }
+            let available = held.get(key: id)
+            if amount > available {
+                revert_error(ExceedsHeld {})
+            }
+
+            held.set(key: id, value: available - amount)
+            charged.set(key: id, value: charged.get(key: id) + amount)
+            erc20::safe_transfer(token: tab.token, receiver: tab.merchant, amount)
+            log.emit(ChargedTab { id, amount })
+        }
+
+        Close { id } uses (ctx, mut call, terms, mut held, mut log) {
+            let tab = terms.get(key: id)
+            if ctx.caller() != tab.merchant {
+                revert_error(NotMerchant {})
+            }
+            let amount = held.get(key: id)
+            if amount == 0 {
+                revert_error(ZeroAmount {})
+            }
+
+            held.set(key: id, value: 0)
+            erc20::safe_transfer(token: tab.token, receiver: tab.payer, amount)
+            log.emit(Released { id, amount })
+        }
+
+        // Open to anyone: the funds can only go back to the payer.
+        Reclaim { id } uses (ctx, mut call, terms, mut held, mut log) {
+            let tab = terms.get(key: id)
+            if ctx.timestamp() <= tab.capture_by {
+                revert_error(NotExpired {})
+            }
+            let amount = held.get(key: id)
+            if amount == 0 {
+                revert_error(ZeroAmount {})
+            }
+
+            held.set(key: id, value: 0)
+            erc20::safe_transfer(token: tab.token, receiver: tab.payer, amount)
+            log.emit(Released { id, amount })
+        }
+
+        // Pulls from the merchant, which must have approved this contract.
+        Refund { id, amount } uses (ctx, mut call, terms, charged, mut refunded, mut log) {
+            let tab = terms.get(key: id)
+            if ctx.caller() != tab.merchant {
+                revert_error(NotMerchant {})
+            }
+            if amount == 0 {
+                revert_error(ZeroAmount {})
+            }
+            let done = refunded.get(key: id)
+            if amount > charged.get(key: id) - done {
+                revert_error(ExceedsCharged {})
+            }
+
+            refunded.set(key: id, value: done + amount)
+            erc20::safe_transfer_from(
+                token: tab.token,
+                owner: tab.merchant,
+                receiver: tab.payer,
+                amount,
             )
-            log.emit(Withdrawn { owner, to, amount })
-            amount
+            log.emit(RefundedTab { id, amount })
         }
 
-        BalanceOf { owner } -> Wei uses (balances) {
-            balances.get(key: owner)
+        Digest { payer, merchant, token, limit, open_by, capture_by, nonce } -> u256
+        uses (ctx, domain)
+        {
+            domain
+                .digest(
+                    struct_hash: authorization_hash(
+                        payer,
+                        merchant,
+                        token,
+                        limit,
+                        open_by,
+                        capture_by,
+                        nonce,
+                    ),
+                )
         }
 
-        UnlockTime { owner } -> Timestamp uses (unlock_at) {
-            unlock_at.get(key: owner)
+        Held { id } -> u256 uses (held) {
+            held.get(key: id)
+        }
+
+        Charged { id } -> u256 uses (charged) {
+            charged.get(key: id)
+        }
+
+        Refunded { id } -> u256 uses (refunded) {
+            refunded.get(key: id)
         }
     }
 }

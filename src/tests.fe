@@ -1,85 +1,373 @@
 // Run the tests with `fe test`.
+//
+// The test account acts as the merchant. The payer is a contract wallet that
+// approves digests on chain (ERC-1271), so no private key is needed.
 
-use ingot::{Vault, VaultMsg}
-use std::evm::{days, ether}
+use ingot::{Tab, TabMsg}
+use std::abi::Bytes32
 
-#[test(balance = 10_000_000_000_000_000_000)]
-fn deposit_is_locked() uses (evm: mut Evm) {
-    let vault = evm.create2<Vault>(value: Wei::zero(), args: (days(7),), salt: 0)
+const GAS: u256 = 1_000_000
+const LIMIT: u256 = 100
+const MAGIC_WORD: u256 = 0x1626ba7e << 224
+const NEVER: u256 = 0xffffffffffff
 
-    let unlock: Timestamp = evm
-        .call(
-            addr: vault,
-            gas: 200000,
-            value: ether(1),
-            message: VaultMsg::Deposit {},
-        )
-    let balance: Wei = evm
-        .call(
-            addr: vault,
-            gas: 100000,
-            value: Wei::zero(),
-            message: VaultMsg::BalanceOf { owner: evm.address() },
-        )
-    assert!(balance == ether(1))
-
-    let stored: Timestamp = evm
-        .call(
-            addr: vault,
-            gas: 100000,
-            value: Wei::zero(),
-            message: VaultMsg::UnlockTime { owner: evm.address() },
-        )
-    assert!(stored == unlock)
+msg TokenMsg {
+    #[selector = sol("balanceOf(address)")]
+    BalanceOf { account: Address } -> u256,
+    #[selector = sol("transfer(address,uint256)")]
+    Transfer { to: Address, amount: u256 } -> bool,
+    #[selector = sol("approve(address,uint256)")]
+    Approve { spender: Address, amount: u256 } -> bool,
+    #[selector = sol("transferFrom(address,address,uint256)")]
+    TransferFrom { from: Address, to: Address, amount: u256 } -> bool,
+    #[selector = sol("mint(address,uint256)")]
+    Mint { to: Address, amount: u256 },
 }
 
-#[test(should_revert, balance = 10_000_000_000_000_000_000)]
-fn withdraw_before_unlock_reverts() uses (evm: mut Evm) {
-    let vault = evm.create2<Vault>(value: Wei::zero(), args: (days(7),), salt: 0)
-    let _: Timestamp = evm
-        .call(
-            addr: vault,
-            gas: 200000,
-            value: ether(1),
-            message: VaultMsg::Deposit {},
-        )
-    let _: Wei = evm
-        .call(
-            addr: vault,
-            gas: 200000,
-            value: Wei::zero(),
-            message: VaultMsg::Withdraw { to: evm.address() },
-        )
+pub contract Token uses (ctx: Ctx) {
+    mut balances: StorageMap<Address, u256>,
+    mut allowances: StorageMap<(Address, Address), u256>,
+
+    recv TokenMsg {
+        BalanceOf { account } -> u256 uses (balances) {
+            balances.get(key: account)
+        }
+
+        Transfer { to, amount } -> bool uses (ctx, mut balances) {
+            let from = ctx.caller()
+            balances.set(key: from, value: balances.get(key: from) - amount)
+            balances.set(key: to, value: balances.get(key: to) + amount)
+            true
+        }
+
+        Approve { spender, amount } -> bool uses (ctx, mut allowances) {
+            allowances.set(key: (ctx.caller(), spender), value: amount)
+            true
+        }
+
+        TransferFrom { from, to, amount } -> bool
+        uses (ctx, mut balances, mut allowances)
+        {
+            let spender = ctx.caller()
+            allowances
+                .set(
+                    key: (from, spender),
+                    value: allowances.get(key: (from, spender)) - amount,
+                )
+            balances.set(key: from, value: balances.get(key: from) - amount)
+            balances.set(key: to, value: balances.get(key: to) + amount)
+            true
+        }
+
+        Mint { to, amount } uses (mut balances) {
+            balances.set(key: to, value: balances.get(key: to) + amount)
+        }
+    }
 }
 
-#[test(balance = 10_000_000_000_000_000_000)]
-fn withdraw_after_unlock() uses (evm: mut Evm) {
-    // Without a lock period, a deposit can be withdrawn right away.
-    let vault = evm.create2<Vault>(value: Wei::zero(), args: (Duration::zero(),), salt: 0)
-    let _: Timestamp = evm
-        .call(
-            addr: vault,
-            gas: 200000,
-            value: ether(1),
-            message: VaultMsg::Deposit {},
-        )
+msg WalletMsg {
+    #[selector = sol("isValidSignature(bytes32,bytes)")]
+    IsValidSignature { hash: Bytes32, signature: Bytes } -> u256,
+    #[selector = sol("sign(uint256)")]
+    Sign { digest: u256 },
+    #[selector = sol("approve(address,address,uint256)")]
+    Approve { token: Address, spender: Address, amount: u256 },
+}
 
-    let payee = Address::new(0x1234)
-    let withdrawn: Wei = evm
+/// A payer wallet that accepts the digests it was told to sign.
+pub contract Wallet uses (call: mut Call) {
+    mut signed: StorageMap<u256, bool>,
+
+    recv WalletMsg {
+        IsValidSignature { hash, signature } -> u256
+        uses (signed)
+        {
+            if signed.get(key: hash.val) {
+                return MAGIC_WORD
+            }
+            let rejected: u256 = 0
+            rejected
+        }
+
+        Sign { digest } uses (mut signed) {
+            signed.set(key: digest, value: true)
+        }
+
+        Approve { token, spender, amount } uses (mut call) {
+            let ok: bool = call
+                .call(
+                    addr: token,
+                    gas: GAS,
+                    value: Wei::zero(),
+                    message: TokenMsg::Approve { spender, amount },
+                )
+            assert!(ok)
+        }
+    }
+}
+
+msg StrangerMsg {
+    #[selector = sol("charge(address,uint256,uint256)")]
+    Charge { tab: Address, id: u256, amount: u256 },
+}
+
+/// Any account other than the merchant.
+pub contract Stranger uses (call: mut Call) {
+    recv StrangerMsg {
+        Charge { tab, id, amount } uses (mut call) {
+            call.call(
+                addr: tab,
+                gas: GAS,
+                value: Wei::zero(),
+                message: TabMsg::Charge { id, amount },
+            )
+        }
+    }
+}
+
+struct World { token: Address, tab: Address, wallet: Address }
+
+impl Copy for World {}
+
+/// Deploys everything and funds the wallet with `LIMIT` tokens, approved for
+/// the tab contract.
+fn world() -> World uses (evm: mut Evm) {
+    let token = evm.create2<Token>(value: Wei::zero(), args: (), salt: 0)
+    let tab = evm.create2<Tab>(value: Wei::zero(), args: (), salt: 0)
+    let wallet = evm.create2<Wallet>(value: Wei::zero(), args: (), salt: 0)
+    evm.call(
+        addr: token,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TokenMsg::Mint { to: wallet, amount: LIMIT },
+    )
+    evm.call(
+        addr: wallet,
+        gas: GAS,
+        value: Wei::zero(),
+        message: WalletMsg::Approve { token, spender: tab, amount: LIMIT },
+    )
+    World { token, tab, wallet }
+}
+
+/// Has the wallet sign an authorization for `signed_limit`, then opens a tab
+/// for `limit` with the test account as merchant.
+fn open(w: World, signed_limit: u256, limit: u256, capture_by: u256) -> u256
+uses (evm: mut Evm)
+{
+    let merchant = evm.address()
+    let open_by = Timestamp::from_seconds(NEVER)
+    let capture_by = Timestamp::from_seconds(capture_by)
+    let digest: u256 = evm
         .call(
-            addr: vault,
-            gas: 200000,
+            addr: w.tab,
+            gas: GAS,
             value: Wei::zero(),
-            message: VaultMsg::Withdraw { to: payee },
+            message: TabMsg::Digest {
+                payer: w.wallet,
+                merchant,
+                token: w.token,
+                limit: signed_limit,
+                open_by,
+                capture_by,
+                nonce: 1,
+            },
         )
-    assert!(withdrawn == ether(1))
-    assert!(evm.balance(payee) == ether(1))
-    let balance: Wei = evm
+    evm.call(
+        addr: w.wallet,
+        gas: GAS,
+        value: Wei::zero(),
+        message: WalletMsg::Sign { digest },
+    )
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Open {
+            payer: w.wallet,
+            merchant,
+            token: w.token,
+            limit,
+            open_by,
+            capture_by,
+            nonce: 1,
+            signature: Bytes::empty(),
+        },
+    )
+}
+
+fn balance(w: World, account: Address) -> u256 uses (evm: mut Evm) {
+    evm.call(
+        addr: w.token,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TokenMsg::BalanceOf { account },
+    )
+}
+
+fn held(w: World, id: u256) -> u256 uses (evm: mut Evm) {
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Held { id },
+    )
+}
+
+fn charge(w: World, id: u256, amount: u256) uses (evm: mut Evm) {
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Charge { id, amount },
+    )
+}
+
+#[test]
+fn open_moves_the_limit_into_escrow() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    assert!(held(w, id) == LIMIT)
+    assert!(balance(w, account: w.tab) == LIMIT)
+    assert!(balance(w, account: w.wallet) == 0)
+}
+
+#[test]
+fn charge_in_parts_then_close() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+
+    charge(w, id, amount: 30)
+    charge(w, id, amount: 20)
+    assert!(balance(w, account: evm.address()) == 50)
+    assert!(held(w, id) == 50)
+
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Close { id },
+    )
+    assert!(held(w, id) == 0)
+    assert!(balance(w, account: w.wallet) == 50)
+    assert!(balance(w, account: w.tab) == 0)
+}
+
+#[test]
+fn refund_returns_charged_funds() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    charge(w, id, amount: 60)
+
+    let _: bool = evm
         .call(
-            addr: vault,
-            gas: 100000,
+            addr: w.token,
+            gas: GAS,
             value: Wei::zero(),
-            message: VaultMsg::BalanceOf { owner: evm.address() },
+            message: TokenMsg::Approve { spender: w.tab, amount: 25 },
         )
-    assert!(balance == Wei::zero())
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Refund { id, amount: 25 },
+    )
+    assert!(balance(w, account: w.wallet) == 25)
+    assert!(balance(w, account: evm.address()) == 35)
+    let refunded: u256 = evm
+        .call(
+            addr: w.tab,
+            gas: GAS,
+            value: Wei::zero(),
+            message: TabMsg::Refunded { id },
+        )
+    assert!(refunded == 25)
+}
+
+#[test]
+fn reclaim_after_the_capture_window() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: 0)
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Reclaim { id },
+    )
+    assert!(balance(w, account: w.wallet) == LIMIT)
+    assert!(held(w, id) == 0)
+}
+
+// cast sig "NotExpired()"
+#[test(should_revert, selector = 0xd0404f85)]
+fn reclaim_inside_the_capture_window_reverts() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Reclaim { id },
+    )
+}
+
+// cast sig "Expired()"
+#[test(should_revert, selector = 0x203d82d8)]
+fn charge_after_the_capture_window_reverts() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: 0)
+    charge(w, id, amount: 1)
+}
+
+// cast sig "ExceedsHeld()"
+#[test(should_revert, selector = 0x4d0b7d02)]
+fn charge_above_the_held_amount_reverts() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    charge(w, id, amount: 70)
+    charge(w, id, amount: 31)
+}
+
+// cast sig "AlreadyOpen()"
+#[test(should_revert, selector = 0x965f8d94)]
+fn opening_the_same_authorization_twice_reverts() uses (evm: mut Evm) {
+    let w = world()
+    let _ = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    let _ = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+}
+
+// The wallet signed for 50, the merchant asks for 100.
+// cast sig "BadSignature()"
+#[test(should_revert, selector = 0x5cd5d233)]
+fn opening_with_changed_terms_reverts() uses (evm: mut Evm) {
+    let w = world()
+    let _ = open(w, signed_limit: 50, limit: LIMIT, capture_by: NEVER)
+}
+
+// cast sig "NotMerchant()"
+#[test(should_revert, selector = 0x3b6405f4)]
+fn stranger_cannot_charge() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    let stranger = evm.create2<Stranger>(value: Wei::zero(), args: (), salt: 0)
+    evm.call(
+        addr: stranger,
+        gas: GAS,
+        value: Wei::zero(),
+        message: StrangerMsg::Charge { tab: w.tab, id, amount: 1 },
+    )
+}
+
+// cast sig "ExceedsCharged()"
+#[test(should_revert, selector = 0xaddddaa3)]
+fn refund_above_the_charged_amount_reverts() uses (evm: mut Evm) {
+    let w = world()
+    let id = open(w, signed_limit: LIMIT, limit: LIMIT, capture_by: NEVER)
+    charge(w, id, amount: 10)
+    evm.call(
+        addr: w.tab,
+        gas: GAS,
+        value: Wei::zero(),
+        message: TabMsg::Refund { id, amount: 11 },
+    )
 }
